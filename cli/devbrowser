@@ -1,0 +1,398 @@
+#!/usr/bin/env bash
+#
+# devbrowser — talk to the DevBrowser app running on Windows from inside WSL2.
+#
+# Transport: DevBrowser's Electron main process runs a control server bound to the
+# Windows 127.0.0.1. Because this machine runs WSL with networkingMode=mirrored,
+# that loopback address is reachable directly from Linux — no port proxy needed.
+#
+# If DevBrowser isn't running, `devbrowser title` still works: it writes straight to
+# the titles file under %APPDATA%, which the app loads on its next launch. Commands
+# that need a live window (open/go/reload/close) fail loudly instead.
+#
+# Usage:
+#   devbrowser title <port> "<name>"    assign a friendly name to a port
+#   devbrowser title <port> --clear     remove the name
+#   devbrowser titles [--json]          list all assigned names
+#   devbrowser open <port> [path]       open (or focus) a tab
+#   devbrowser go <port> <path>         navigate an existing tab
+#   devbrowser reload <port>            reload a tab
+#   devbrowser close <port>             close a tab
+#   devbrowser ports [--json]           detected / open / selected ports
+#   devbrowser status                   is the app reachable, and on which port
+
+set -uo pipefail
+
+DEFAULT_PORT=45777
+CLIENT_HEADER='X-DevBrowser-Client: 1'
+APP_DIR_NAME='dev-browser-desktop'
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/devbrowser"
+CURL_TIMEOUT=3
+
+PROG=${0##*/}
+
+die() { printf '%s: %s\n' "$PROG" "$1" >&2; exit "${2:-1}"; }
+
+usage() {
+    sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+    exit "${1:-0}"
+}
+
+require_python() {
+    command -v python3 >/dev/null 2>&1 || die 'python3 is required but not installed'
+}
+
+# ---------------------------------------------------------------------------
+# Windows path discovery
+# ---------------------------------------------------------------------------
+
+# Resolve %APPDATA% to a WSL path. cmd.exe must be run from a Windows-backed cwd
+# or it warns about UNC paths, hence the subshell cd. Cached because spawning
+# cmd.exe costs ~200ms.
+appdata_dir() {
+    local cache_file="$CACHE_DIR/appdata" cached win_path unix_path
+
+    if [[ -f "$cache_file" ]]; then
+        cached=$(<"$cache_file")
+        if [[ -n "$cached" && -d "$cached" ]]; then
+            printf '%s' "$cached"
+            return 0
+        fi
+    fi
+
+    win_path=$(cd /mnt/c 2>/dev/null && cmd.exe /c 'echo %APPDATA%' 2>/dev/null | tr -d '\r\n')
+    [[ -n "$win_path" ]] || return 1
+
+    unix_path=$(wslpath -u "$win_path" 2>/dev/null) || return 1
+    [[ -d "$unix_path" ]] || return 1
+
+    mkdir -p "$CACHE_DIR" 2>/dev/null
+    printf '%s' "$unix_path" >"$cache_file" 2>/dev/null
+
+    printf '%s' "$unix_path"
+}
+
+data_dir() {
+    local base
+    base=$(appdata_dir) || return 1
+    printf '%s/%s' "$base" "$APP_DIR_NAME"
+}
+
+# ---------------------------------------------------------------------------
+# Endpoint resolution
+# ---------------------------------------------------------------------------
+
+probe() {
+    curl -fsS --max-time "$CURL_TIMEOUT" -H "$CLIENT_HEADER" \
+        "http://127.0.0.1:$1/health" >/dev/null 2>&1
+}
+
+# Default port first; fall back to the port advertised in the discovery file,
+# which is written when the default was already taken.
+resolve_port() {
+    local dir disc advertised
+
+    if probe "$DEFAULT_PORT"; then
+        printf '%s' "$DEFAULT_PORT"
+        return 0
+    fi
+
+    dir=$(data_dir) || return 1
+    disc="$dir/control-server.json"
+    [[ -f "$disc" ]] || return 1
+
+    advertised=$(python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1]) as fh:
+        print(json.load(fh).get("port", ""))
+except Exception:
+    pass
+' "$disc" 2>/dev/null)
+
+    [[ -n "$advertised" ]] || return 1
+    probe "$advertised" || return 1
+
+    printf '%s' "$advertised"
+}
+
+# api <method> <path> [json-body]
+api() {
+    local method=$1 route=$2 body=${3:-} port
+    port=$(resolve_port) || return 2
+
+    if [[ -n "$body" ]]; then
+        curl -fsS --max-time "$CURL_TIMEOUT" -X "$method" \
+            -H "$CLIENT_HEADER" -H 'Content-Type: application/json' \
+            -d "$body" "http://127.0.0.1:$port$route"
+    else
+        curl -fsS --max-time "$CURL_TIMEOUT" -X "$method" \
+            -H "$CLIENT_HEADER" "http://127.0.0.1:$port$route"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+validate_port() {
+    [[ $1 =~ ^[0-9]+$ ]] && (( $1 >= 1 && $1 <= 65535 )) \
+        || die "port must be an integer between 1 and 65535, got: $1"
+}
+
+json_string() {
+    require_python
+    python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"
+}
+
+# Write a title straight to the app's titles.json. Mirrors the app's own
+# normalisation (collapse whitespace, cap at 64) and atomic tmp+rename so the two
+# writers stay consistent.
+offline_set_title() {
+    local file=$1 port=$2 title=$3
+    require_python
+    python3 - "$file" "$port" "$title" <<'PY'
+import json, os, re, sys, tempfile
+
+path, port, title = sys.argv[1], sys.argv[2], sys.argv[3]
+
+title = re.sub(r'\s+', ' ', title).strip()[:64]
+
+titles = {}
+try:
+    with open(path, encoding='utf-8') as fh:
+        loaded = json.load(fh)
+    if isinstance(loaded, dict) and isinstance(loaded.get('titles'), dict):
+        titles = {str(k): v for k, v in loaded['titles'].items() if isinstance(v, str)}
+except (OSError, ValueError):
+    pass
+
+if title:
+    titles[port] = title
+else:
+    titles.pop(port, None)
+
+
+def sort_key(key):
+    try:
+        return (0, int(key))
+    except ValueError:
+        return (1, 0)
+
+
+ordered = {k: titles[k] for k in sorted(titles, key=sort_key)}
+
+# Report the stored value, which may differ from the input after normalisation.
+print(title)
+
+directory = os.path.dirname(path)
+os.makedirs(directory, exist_ok=True)
+fd, tmp = tempfile.mkstemp(dir=directory, prefix='.titles-', suffix='.tmp')
+try:
+    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+        json.dump({'version': 1, 'titles': ordered}, fh, indent=2)
+        fh.write('\n')
+    os.replace(tmp, path)
+except BaseException:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
+PY
+}
+
+print_titles() {
+    require_python
+    python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+titles = payload.get("titles", {})
+if not titles:
+    print("No port titles set.")
+    sys.exit(0)
+width = max(len(k) for k in titles)
+for port in sorted(titles, key=lambda k: int(k) if k.isdigit() else 0):
+    print(f"{port:>{width}}  {titles[port]}")
+'
+}
+
+print_ports() {
+    require_python
+    python3 -c '
+import json, sys
+p = json.load(sys.stdin)
+titles = p.get("titles", {})
+
+
+def fmt(ports):
+    if not ports:
+        return "(none)"
+    return ", ".join(
+        f"{port}" + (f" [{titles[str(port)]}]" if str(port) in titles else "")
+        for port in ports
+    )
+
+
+print("detected:", fmt(p.get("detected", [])))
+print("open:    ", fmt(p.get("open", [])))
+selected = p.get("selected")
+print("selected:", fmt([selected]) if selected is not None else "(dashboard)")
+'
+}
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+cmd_title() {
+    [[ $# -ge 1 ]] || die 'usage: devbrowser title <port> "<name>" | --clear'
+
+    local port=$1; shift
+    validate_port "$port"
+
+    local title
+    if [[ $# -eq 0 ]]; then
+        die 'usage: devbrowser title <port> "<name>" | --clear'
+    elif [[ $1 == '--clear' || $1 == '-c' ]]; then
+        title=''
+    else
+        title="$*"
+    fi
+
+    local body response stored
+    body="{\"title\": $(json_string "$title")}"
+
+    # Report the value the store actually kept: it collapses whitespace and caps
+    # the length, so it can differ from what was typed.
+    if response=$(api PUT "/titles/$port" "$body" 2>/dev/null); then
+        stored=$(printf '%s' "$response" | python3 -c \
+            'import json,sys; print(json.load(sys.stdin).get("title") or "")' 2>/dev/null)
+        if [[ -z $stored ]]; then
+            printf 'Cleared title for port %s.\n' "$port"
+        else
+            printf 'Port %s is now "%s".\n' "$port" "$stored"
+        fi
+        return 0
+    fi
+
+    # App is down: persist to the file it reads at startup.
+    local dir
+    dir=$(data_dir) || die "DevBrowser is not running and %APPDATA% could not be resolved"
+
+    stored=$(offline_set_title "$dir/titles.json" "$port" "$title") \
+        || die "failed to write $dir/titles.json"
+
+    if [[ -z $stored ]]; then
+        printf 'DevBrowser is not running — cleared title for port %s, saved for next launch.\n' "$port"
+    else
+        printf 'DevBrowser is not running — port %s saved as "%s" for next launch.\n' "$port" "$stored"
+    fi
+}
+
+cmd_titles() {
+    local out
+    if ! out=$(api GET /titles 2>/dev/null); then
+        # Fall back to reading the file so titles are visible with the app closed.
+        local dir file
+        dir=$(data_dir) || die 'DevBrowser is not running and %APPDATA% could not be resolved' 2
+        file="$dir/titles.json"
+        [[ -f $file ]] || { echo 'No port titles set.'; return 0; }
+        out=$(cat "$file")
+    fi
+
+    if [[ ${1:-} == '--json' ]]; then
+        printf '%s\n' "$out"
+    else
+        printf '%s' "$out" | print_titles
+    fi
+}
+
+cmd_tab() {
+    local action=$1 port=$2 target=${3:-}
+    validate_port "$port"
+
+    local body
+    if [[ -n $target ]]; then
+        body="{\"port\": $port, \"path\": $(json_string "$target")}"
+    else
+        body="{\"port\": $port}"
+    fi
+
+    api POST "/tabs/$action" "$body" >/dev/null 2>&1 \
+        || die 'DevBrowser is not running (tab commands need a live window)' 2
+
+    case $action in
+        open)     printf 'Opened localhost:%s%s\n' "$port" "${target:+/$target}" ;;
+        navigate) printf 'Navigated port %s to /%s\n' "$port" "$target" ;;
+        reload)   printf 'Reloaded port %s\n' "$port" ;;
+        close)    printf 'Closed port %s\n' "$port" ;;
+    esac
+}
+
+cmd_ports() {
+    local out
+    out=$(api GET /ports 2>/dev/null) || die 'DevBrowser is not running' 2
+
+    if [[ ${1:-} == '--json' ]]; then
+        printf '%s\n' "$out"
+    else
+        printf '%s' "$out" | print_ports
+    fi
+}
+
+cmd_status() {
+    local port dir
+    if port=$(resolve_port); then
+        printf 'DevBrowser: running\n'
+        printf 'control:    http://127.0.0.1:%s\n' "$port"
+        api GET /health 2>/dev/null | python3 -c '
+import json, sys
+try:
+    print("version:    " + str(json.load(sys.stdin).get("version", "?")))
+except Exception:
+    pass
+' 2>/dev/null
+    else
+        printf 'DevBrowser: not running\n'
+        printf 'control:    unreachable (tried 127.0.0.1:%s)\n' "$DEFAULT_PORT"
+    fi
+
+    if dir=$(data_dir); then
+        printf 'data dir:   %s\n' "$dir"
+        if [[ -f "$dir/titles.json" ]]; then
+            printf 'titles:     %s\n' "$dir/titles.json"
+        else
+            printf 'titles:     (none written yet)\n'
+        fi
+    else
+        printf 'data dir:   could not resolve %%APPDATA%%\n'
+    fi
+}
+
+# ---------------------------------------------------------------------------
+
+main() {
+    [[ $# -ge 1 ]] || usage 1
+
+    local command=$1; shift
+
+    case $command in
+        title)   cmd_title "$@" ;;
+        titles)  cmd_titles "$@" ;;
+        open)    [[ $# -ge 1 ]] || die 'usage: devbrowser open <port> [path]'
+                 cmd_tab open "$1" "${2:-}" ;;
+        go)      [[ $# -ge 2 ]] || die 'usage: devbrowser go <port> <path>'
+                 cmd_tab navigate "$1" "$2" ;;
+        reload)  [[ $# -ge 1 ]] || die 'usage: devbrowser reload <port>'
+                 cmd_tab reload "$1" ;;
+        close)   [[ $# -ge 1 ]] || die 'usage: devbrowser close <port>'
+                 cmd_tab close "$1" ;;
+        ports)   cmd_ports "$@" ;;
+        status)  cmd_status ;;
+        help|-h|--help) usage 0 ;;
+        *)       die "unknown command: $command (try: devbrowser help)" ;;
+    esac
+}
+
+main "$@"

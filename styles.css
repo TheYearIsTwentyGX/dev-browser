@@ -348,6 +348,76 @@ body {
     color: var(--accent-cyan);
 }
 
+/* Friendly names assigned by agents through the control channel.
+   The port number stays primary; the title is a secondary line that
+   ellipsises, with the full text available in the card tooltip. */
+.port-card .port-num {
+    line-height: 1.2;
+}
+
+.port-card.has-title {
+    /* Extra bottom room so the active-tab dot clears the title line */
+    padding: 8px 6px 13px;
+    gap: 2px;
+}
+
+.port-card .port-title {
+    font-family: var(--font-sans);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.75;
+}
+
+/* Titles do not fit the narrow collapsed rail */
+#control-panel.collapsed .port-card .port-title {
+    display: none;
+}
+
+#control-panel.collapsed .port-card.has-title {
+    padding: 8px 0;
+}
+
+/* Detected-port strips lead with the title when one is set */
+.port-strip .strip-label {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    text-align: left;
+}
+
+.port-strip .strip-title {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.port-strip .strip-title.untitled {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.port-strip .strip-port {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    opacity: 0.7;
+}
+
+#control-panel.collapsed .port-strip .strip-port {
+    display: none;
+}
+
 /* Button & input elements style */
 .input-row {
     display: flex;
@@ -622,6 +692,25 @@ input[type="text"]:focus, input[type="number"]:focus {
     font-size: 13px;
     display: flex;
     align-items: center;
+}
+
+/* Friendly name of the active tab, set through the control channel */
+#address-bar .address-title {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    background-color: rgba(6,182,212,0.12);
+    border: 1px solid rgba(6,182,212,0.35);
+    border-radius: 6px;
+    padding: 2px 8px;
+    margin-right: 10px;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+    user-select: none;
 }
 
 #address-bar .protocol {

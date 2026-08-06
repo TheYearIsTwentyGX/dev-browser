@@ -5,6 +5,8 @@ let activeDetectedPorts = [];
 let currentDeviceWidth = 0;
 let currentDeviceHeight = 0;
 let isLandscape = false;
+// Friendly names keyed by port, set by agents through the control channel
+let portTitles = {};
 
 // DOM Elements
 const webviewContainer = document.getElementById('webview-container');
@@ -21,6 +23,7 @@ const dashboardLanding = document.getElementById('dashboard-landing');
 const browserView = document.getElementById('browser-view');
 const webHomeBtn = document.getElementById('web-home-btn');
 const addressHost = document.getElementById('address-host');
+const addressTitle = document.getElementById('address-title');
 const addressPathInput = document.getElementById('address-path-input');
 const controlPanel = document.getElementById('control-panel');
 const collapseSidebarBtn = document.getElementById('collapse-sidebar-btn');
@@ -78,6 +81,29 @@ function parseRanges(ranges) {
     return Array.from(new Set(ports)).sort((a, b) => a - b);
 }
 
+// --- 1b. Port Titles (set remotely by agents) ---
+
+function titleFor(port) {
+    return portTitles[String(port)] || null;
+}
+
+// Titles arrive from outside the app, so escape before any innerHTML use
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
+}
+
+// Push tab state up to main so the control server can answer GET /ports
+function syncStateToMain() {
+    if (!window.devBrowser) return;
+    window.devBrowser.syncState({
+        openTabs: openTabs,
+        selectedPort: selectedPort,
+        detectedPorts: activeDetectedPorts
+    });
+}
+
 // --- 2. Render Functions ---
 
 // Render Range List in Settings editor
@@ -119,7 +145,23 @@ function renderPortsGrid() {
         const card = document.createElement('button');
         card.className = 'port-card';
         card.id = `port-card-${port}`;
-        card.innerText = port;
+
+        const title = titleFor(port);
+        const portLabel = document.createElement('span');
+        portLabel.className = 'port-num';
+        portLabel.innerText = port;
+        card.appendChild(portLabel);
+
+        if (title) {
+            card.classList.add('has-title');
+            const titleLabel = document.createElement('span');
+            titleLabel.className = 'port-title';
+            titleLabel.innerText = title;
+            card.appendChild(titleLabel);
+            card.title = `${title} — localhost:${port}`;
+        } else {
+            card.title = `localhost:${port}`;
+        }
 
         // Apply state classes
         if (openTabs.includes(port)) card.classList.add('active-tab');
@@ -144,8 +186,15 @@ function renderDetectedPortsList() {
     activeDetectedPorts.forEach(port => {
         const strip = document.createElement('div');
         strip.className = 'port-strip';
+
+        // Named ports lead with the title and keep the port as a secondary label
+        const title = titleFor(port);
+        const label = title
+            ? `<span class="strip-label"><span class="strip-title">${escapeHtml(title)}</span><span class="strip-port">Port ${port}</span></span>`
+            : `<span class="strip-label"><span class="strip-title untitled">Port ${port}</span></span>`;
+
         strip.innerHTML = `
-            <span>Port ${port}</span>
+            ${label}
             <span class="badge">Active</span>
         `;
         strip.addEventListener('click', () => openPort(port));
@@ -155,13 +204,19 @@ function renderDetectedPortsList() {
 
 // --- 3. WebView & Tab Manager ---
 
-function openPort(port) {
+// Build a localhost URL, tolerating a path with or without its leading slash
+function urlForPort(port, targetPath) {
+    const clean = (targetPath || '').replace(/^\/+/, '');
+    return `http://localhost:${port}/${clean}`;
+}
+
+function openPort(port, targetPath, shouldSelect = true) {
     if (!openTabs.includes(port)) {
         openTabs.push(port);
-        
+
         // Instantiate <webview> tag in container
         const webview = document.createElement('webview');
-        webview.setAttribute('src', `http://localhost:${port}`);
+        webview.setAttribute('src', urlForPort(port, targetPath));
         webview.setAttribute('id', `webview-${port}`);
         // Disable web security to allow local host frames and bypass strict CORS issues during development
         webview.setAttribute('webpreferences', 'webSecurity=no, contextIsolation=yes');
@@ -173,16 +228,39 @@ function openPort(port) {
         
         webviewContainer.appendChild(webview);
         localStorage.setItem('open-tabs', JSON.stringify(openTabs)); // Save state
+    } else if (targetPath !== undefined && targetPath !== null) {
+        // Tab already exists, so honour the requested path instead of ignoring it
+        const webview = document.getElementById(`webview-${port}`);
+        if (webview) webview.loadURL(urlForPort(port, targetPath));
     }
-    
-    selectTab(port);
+
+    if (shouldSelect) selectTab(port);
     renderPortsGrid();
+    syncStateToMain();
+}
+
+// Reflect the active tab's friendly name in the OS window title and address bar
+function updateActiveTabLabels() {
+    const title = selectedPort === null ? null : titleFor(selectedPort);
+
+    if (selectedPort === null) {
+        document.title = 'Dev Browser - Windows Desktop';
+    } else {
+        document.title = title
+            ? `${title} (:${selectedPort}) - Dev Browser`
+            : `localhost:${selectedPort} - Dev Browser`;
+    }
+
+    if (addressTitle) {
+        addressTitle.innerText = title || '';
+        addressTitle.classList.toggle('hidden', !title);
+    }
 }
 
 function selectTab(port) {
     selectedPort = port;
     localStorage.setItem('selected-port', port === null ? '' : port); // Save state
-    
+
     if (port === null) {
         webHomeBtn.classList.add('active');
         dashboardLanding.classList.remove('hidden');
@@ -203,6 +281,9 @@ function selectTab(port) {
             }
         });
     }
+
+    updateActiveTabLabels();
+    syncStateToMain();
 }
 
 function closeTab(port) {
@@ -223,6 +304,7 @@ function closeTab(port) {
         }
     }
     renderPortsGrid();
+    syncStateToMain();
 }
 
 function updateBrowserButtons(port) {
@@ -398,9 +480,66 @@ async function checkActivePorts() {
         
         renderDetectedPortsList();
         renderPortsGrid();
+        syncStateToMain();
     } catch (e) {
         console.error("Failed to query active ports via IPC:", e);
     }
+}
+
+// --- 5b. Agent Control Channel ---
+
+// Re-render everything that can show a friendly name
+function applyTitles(titles) {
+    portTitles = titles || {};
+    renderPortsGrid();
+    renderDetectedPortsList();
+    updateActiveTabLabels();
+}
+
+// Commands arrive from the control server via main; they reuse the same tab
+// functions the UI buttons do, so behaviour stays identical either way.
+function handleRemoteCommand(command) {
+    if (!command || typeof command.port !== 'number') return;
+    const { action, port, path: targetPath } = command;
+
+    switch (action) {
+        case 'open':
+            openPort(port, targetPath, command.select !== false);
+            break;
+        case 'navigate': {
+            // Open the tab first if it isn't already there, otherwise there is
+            // nothing to navigate.
+            if (!openTabs.includes(port)) {
+                openPort(port, targetPath, command.select !== false);
+                break;
+            }
+            const webview = document.getElementById(`webview-${port}`);
+            if (webview) webview.loadURL(urlForPort(port, targetPath));
+            if (command.select !== false) selectTab(port);
+            break;
+        }
+        case 'reload': {
+            const webview = document.getElementById(`webview-${port}`);
+            if (webview) webview.reload();
+            break;
+        }
+        case 'close':
+            if (openTabs.includes(port)) closeTab(port);
+            break;
+        default:
+            console.warn('[dev-browser] unknown remote command:', action);
+    }
+}
+
+function initControlChannel() {
+    if (!window.devBrowser) return;
+
+    window.devBrowser.onTitlesChanged(applyTitles);
+    window.devBrowser.onRemoteCommand(handleRemoteCommand);
+
+    window.devBrowser.getTitles()
+        .then(applyTitles)
+        .catch((e) => console.error('Failed to load port titles:', e));
 }
 
 // --- 6. Event Listeners ---
@@ -497,7 +636,10 @@ orientationBtn.addEventListener('click', toggleOrientation);
 window.addEventListener('DOMContentLoaded', () => {
     renderConfigEditor();
     renderPortsGrid();
-    
+
+    // Hydrate agent-assigned titles and start listening for remote commands
+    initControlChannel();
+
     // Restore sidebar state from preferences
     const isSidebarCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
     if (isSidebarCollapsed) {
