@@ -1,0 +1,538 @@
+// State Management
+let openTabs = [];
+let selectedPort = null;
+let activeDetectedPorts = [];
+let currentDeviceWidth = 0;
+let currentDeviceHeight = 0;
+let isLandscape = false;
+
+// DOM Elements
+const webviewContainer = document.getElementById('webview-container');
+const quickPortsGrid = document.getElementById('quick-ports-grid');
+const customPortInput = document.getElementById('custom-port-input');
+const openCustomPortBtn = document.getElementById('open-custom-port-btn');
+const newRangeInput = document.getElementById('new-range-input');
+const addRangeBtn = document.getElementById('add-range-btn');
+const rangesList = document.getElementById('ranges-list');
+const toggleConfigBtn = document.getElementById('toggle-config-btn');
+const configEditor = document.getElementById('config-editor');
+const detectedPortsList = document.getElementById('detected-ports-list');
+const dashboardLanding = document.getElementById('dashboard-landing');
+const browserView = document.getElementById('browser-view');
+const webHomeBtn = document.getElementById('web-home-btn');
+const addressHost = document.getElementById('address-host');
+const addressPathInput = document.getElementById('address-path-input');
+const controlPanel = document.getElementById('control-panel');
+const collapseSidebarBtn = document.getElementById('collapse-sidebar-btn');
+
+// Browser Buttons
+const webBackBtn = document.getElementById('web-back-btn');
+const webForwardBtn = document.getElementById('web-forward-btn');
+const webRefreshBtn = document.getElementById('web-refresh-btn');
+
+// Resizing Elements
+const deviceWrapper = document.getElementById('device-wrapper');
+const orientationBtn = document.getElementById('orientation-btn');
+const dimensionsBadge = document.getElementById('dimensions-badge');
+const resizerButtons = document.querySelectorAll('.resizer-btn');
+
+// --- 1. Init & SharedPreferences Settings equivalent ---
+function loadRanges() {
+    let ranges = JSON.parse(localStorage.getItem('port-ranges'));
+    if (!ranges || !Array.isArray(ranges)) {
+        ranges = ["5000-5060"];
+        localStorage.setItem('port-ranges', JSON.stringify(ranges));
+    }
+    return ranges;
+}
+
+function saveRanges(ranges) {
+    localStorage.setItem('port-ranges', JSON.stringify(ranges));
+    renderConfigEditor();
+    renderPortsGrid();
+}
+
+function parseRanges(ranges) {
+    const ports = [];
+    for (const rangeStr of ranges) {
+        const clean = rangeStr.trim();
+        if (!clean) continue;
+        if (clean.includes('-')) {
+            const parts = clean.split('-');
+            if (parts.length === 2) {
+                const start = parseInt(parts[0], 10);
+                const end = parseInt(parts[1], 10);
+                if (!isNaN(start) && !isNaN(end) && start <= end) {
+                    for (let p = start; p <= end; p++) {
+                        if (p >= 1 && p <= 65535) ports.push(p);
+                    }
+                }
+            }
+        } else {
+            const p = parseInt(clean, 10);
+            if (!isNaN(p) && p >= 1 && p <= 65535) {
+                ports.push(p);
+            }
+        }
+    }
+    return Array.from(new Set(ports)).sort((a, b) => a - b);
+}
+
+// --- 2. Render Functions ---
+
+// Render Range List in Settings editor
+function renderConfigEditor() {
+    const ranges = loadRanges();
+    rangesList.innerHTML = '';
+    ranges.forEach((range, idx) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <span>${range}</span>
+            <button class="delete-range-btn" data-idx="${idx}">delete</button>
+        `;
+        rangesList.appendChild(li);
+    });
+
+    // Attach deletes
+    document.querySelectorAll('.delete-range-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.target.getAttribute('data-idx'), 10);
+            const ranges = loadRanges();
+            ranges.splice(idx, 1);
+            saveRanges(ranges);
+        });
+    });
+}
+
+// Render the grid of ports based on configured ranges
+function renderPortsGrid() {
+    const ranges = loadRanges();
+    const ports = parseRanges(ranges);
+    quickPortsGrid.innerHTML = '';
+    
+    if (ports.length === 0) {
+        quickPortsGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); font-size: 12px; padding: 20px;">No ports configured. Click settings to add.</div>';
+        return;
+    }
+
+    ports.forEach(port => {
+        const card = document.createElement('button');
+        card.className = 'port-card';
+        card.id = `port-card-${port}`;
+        card.innerText = port;
+
+        // Apply state classes
+        if (openTabs.includes(port)) card.classList.add('active-tab');
+        if (activeDetectedPorts.includes(port)) card.classList.add('detected-active');
+
+        card.addEventListener('click', () => openPort(port));
+        quickPortsGrid.appendChild(card);
+    });
+}
+
+// Render detected active ports list at the top of sidebar
+function renderDetectedPortsList() {
+    if (activeDetectedPorts.length === 0) {
+        detectedPortsList.innerHTML = 'Scanning localhost...';
+        detectedPortsList.className = 'ports-list empty';
+        return;
+    }
+
+    detectedPortsList.innerHTML = '';
+    detectedPortsList.className = 'ports-list';
+
+    activeDetectedPorts.forEach(port => {
+        const strip = document.createElement('div');
+        strip.className = 'port-strip';
+        strip.innerHTML = `
+            <span>Port ${port}</span>
+            <span class="badge">Active</span>
+        `;
+        strip.addEventListener('click', () => openPort(port));
+        detectedPortsList.appendChild(strip);
+    });
+}
+
+// --- 3. WebView & Tab Manager ---
+
+function openPort(port) {
+    if (!openTabs.includes(port)) {
+        openTabs.push(port);
+        
+        // Instantiate <webview> tag in container
+        const webview = document.createElement('webview');
+        webview.setAttribute('src', `http://localhost:${port}`);
+        webview.setAttribute('id', `webview-${port}`);
+        // Disable web security to allow local host frames and bypass strict CORS issues during development
+        webview.setAttribute('webpreferences', 'webSecurity=no, contextIsolation=yes');
+        
+        // Add navigation listeners
+        webview.addEventListener('did-finish-load', () => updateBrowserButtons(port));
+        webview.addEventListener('did-navigate', () => updateBrowserButtons(port));
+        webview.addEventListener('did-navigate-in-page', () => updateBrowserButtons(port));
+        
+        webviewContainer.appendChild(webview);
+        localStorage.setItem('open-tabs', JSON.stringify(openTabs)); // Save state
+    }
+    
+    selectTab(port);
+    renderPortsGrid();
+}
+
+function selectTab(port) {
+    selectedPort = port;
+    localStorage.setItem('selected-port', port === null ? '' : port); // Save state
+    
+    if (port === null) {
+        webHomeBtn.classList.add('active');
+        dashboardLanding.classList.remove('hidden');
+        browserView.classList.add('hidden');
+    } else {
+        webHomeBtn.classList.remove('active');
+        dashboardLanding.classList.add('hidden');
+        browserView.classList.remove('hidden');
+        
+        // Update webview visibilities
+        const webviews = webviewContainer.querySelectorAll('webview');
+        webviews.forEach(wv => {
+            if (wv.id === `webview-${port}`) {
+                wv.classList.add('active');
+                updateBrowserButtons(port);
+            } else {
+                wv.classList.remove('active');
+            }
+        });
+    }
+}
+
+function closeTab(port) {
+    // Remove from open list
+    openTabs = openTabs.filter(t => t !== port);
+    localStorage.setItem('open-tabs', JSON.stringify(openTabs)); // Save state
+    
+    // Destroy DOM element
+    const webview = document.getElementById(`webview-${port}`);
+    if (webview) webview.remove();
+    
+    // Adjust selection if necessary
+    if (selectedPort === port) {
+        if (openTabs.length > 0) {
+            selectTab(openTabs[openTabs.length - 1]);
+        } else {
+            selectTab(null);
+        }
+    }
+    renderPortsGrid();
+}
+
+function updateBrowserButtons(port) {
+    if (selectedPort !== port) return;
+    const webview = document.getElementById(`webview-${port}`);
+    if (!webview) return;
+    
+    try {
+        webBackBtn.disabled = !webview.canGoBack();
+        webForwardBtn.disabled = !webview.canGoForward();
+        
+        // Update address text with current webview URL
+        const url = webview.getURL();
+        if (url) {
+            try {
+                const parsed = new URL(url);
+                addressHost.innerText = `${parsed.host}/`;
+                
+                // Only update the path input if the user is not actively typing/focusing it
+                if (document.activeElement !== addressPathInput) {
+                    let path = parsed.pathname.substring(1) + parsed.search + parsed.hash;
+                    addressPathInput.value = path;
+                }
+            } catch (err) {
+                addressHost.innerText = `localhost:${port}/`;
+                if (document.activeElement !== addressPathInput) {
+                    addressPathInput.value = '';
+                }
+            }
+        } else {
+            addressHost.innerText = `localhost:${port}/`;
+            if (document.activeElement !== addressPathInput) {
+                addressPathInput.value = '';
+            }
+        }
+    } catch (e) {
+        // Webview API might not be ready yet
+    }
+}
+
+// --- 4. Resizer & Orientation Actions ---
+
+function handleResizerClick(e) {
+    const btn = e.target;
+    const type = btn.getAttribute('data-type');
+    
+    // Toggle active state on buttons for this category
+    const groupButtons = btn.closest('.btn-group').querySelectorAll('.resizer-btn');
+    groupButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    if (type === 'window') {
+        const width = parseInt(btn.getAttribute('data-width'), 10);
+        const height = parseInt(btn.getAttribute('data-height'), 10);
+        
+        // Reset internal viewport back to Fit
+        resetInternalViewport();
+        
+        // Send IPC to resize OS Window
+        window.windowManager.resize(width, height);
+    } else if (type === 'viewport') {
+        const device = btn.getAttribute('data-device');
+        
+        if (device === 'fit') {
+            resetInternalViewport();
+        } else {
+            const width = parseInt(btn.getAttribute('data-width'), 10);
+            const height = parseInt(btn.getAttribute('data-height'), 10);
+            setInternalViewport(device, width, height);
+        }
+    }
+}
+
+function setInternalViewport(device, width, height) {
+    currentDeviceWidth = width;
+    currentDeviceHeight = height;
+    
+    // Update wrapper classes
+    deviceWrapper.className = device;
+    if (isLandscape) deviceWrapper.classList.add('landscape');
+    
+    // Apply exact styling
+    updateDeviceDimensions();
+    
+    // Enable Orientation toggle
+    orientationBtn.disabled = false;
+    dimensionsBadge.classList.remove('hidden');
+    
+    // Add device mode padding
+    document.getElementById('viewport-canvas').classList.add('device-mode');
+}
+
+function resetInternalViewport() {
+    deviceWrapper.className = 'fit';
+    
+    // Apply exact styling
+    updateDeviceDimensions();
+    
+    // Disable orientation
+    orientationBtn.disabled = true;
+    dimensionsBadge.classList.add('hidden');
+    
+    // Remove device mode padding
+    document.getElementById('viewport-canvas').classList.remove('device-mode');
+    
+    // Make sure 'Fit' viewport button is active
+    document.querySelectorAll('[data-type="viewport"]').forEach(btn => {
+        if (btn.getAttribute('data-device') === 'fit') {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+}
+
+function toggleOrientation() {
+    if (deviceWrapper.classList.contains('fit')) return;
+    
+    isLandscape = !isLandscape;
+    deviceWrapper.classList.toggle('landscape', isLandscape);
+    updateDeviceDimensions();
+}
+
+function updateDeviceDimensions() {
+    if (deviceWrapper.className === 'fit') {
+        deviceWrapper.style.width = '100%';
+        deviceWrapper.style.height = '100%';
+        deviceWrapper.style.transform = 'none';
+        return;
+    }
+    
+    const canvas = document.getElementById('viewport-canvas');
+    if (!canvas) return;
+    
+    const padding = 80; // 40px padding on each side
+    const canvasWidth = Math.max(100, canvas.clientWidth - padding);
+    const canvasHeight = Math.max(100, canvas.clientHeight - padding);
+    
+    // Calculate target aspect ratio based on selected device presets
+    const baseWidth = isLandscape ? currentDeviceHeight : currentDeviceWidth;
+    const baseHeight = isLandscape ? currentDeviceWidth : currentDeviceHeight;
+    const ratio = baseWidth / baseHeight;
+    
+    let targetWidth, targetHeight;
+    
+    // Fit to available space maintaining aspect ratio
+    if (canvasWidth / canvasHeight > ratio) {
+        // Canvas is wider than target ratio -> fit to height
+        targetHeight = canvasHeight;
+        targetWidth = canvasHeight * ratio;
+    } else {
+        // Canvas is taller than target ratio -> fit to width
+        targetWidth = canvasWidth;
+        targetHeight = canvasWidth / ratio;
+    }
+    
+    // Set actual pixel dimensions on the wrapper (no CSS scaling blurriness!)
+    deviceWrapper.style.width = `${Math.round(targetWidth)}px`;
+    deviceWrapper.style.height = `${Math.round(targetHeight)}px`;
+    deviceWrapper.style.transform = 'none';
+    
+    // Update dimensions badge with actual rendered layout pixels
+    const w = Math.round(targetWidth);
+    const h = Math.round(targetHeight);
+    dimensionsBadge.innerText = `${w}px × ${h}px (${isLandscape ? 'Landscape' : 'Portrait'} - Aspect ${baseWidth}:${baseHeight})`;
+}
+
+async function checkActivePorts() {
+    try {
+        const allowedPortsList = parseRanges(loadRanges());
+        const activePorts = await window.portManager.getActivePorts(allowedPortsList);
+        activeDetectedPorts = activePorts;
+        
+        renderDetectedPortsList();
+        renderPortsGrid();
+    } catch (e) {
+        console.error("Failed to query active ports via IPC:", e);
+    }
+}
+
+// --- 6. Event Listeners ---
+
+// Configuration Settings Gear Toggle
+toggleConfigBtn.addEventListener('click', () => {
+    configEditor.classList.toggle('hidden');
+});
+
+// Add Port Range
+addRangeBtn.addEventListener('click', () => {
+    const val = newRangeInput.value.trim();
+    if (val) {
+        const ranges = loadRanges();
+        ranges.push(val);
+        saveRanges(ranges);
+        newRangeInput.value = '';
+    }
+});
+
+newRangeInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        addRangeBtn.click();
+    }
+});
+
+// Open Custom Port
+openCustomPortBtn.addEventListener('click', () => {
+    const port = parseInt(customPortInput.value, 10);
+    if (!isNaN(port) && port >= 1 && port <= 65535) {
+        openPort(port);
+        customPortInput.value = '';
+    }
+});
+
+customPortInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        openCustomPortBtn.click();
+    }
+});
+
+// Browser Actions
+webBackBtn.addEventListener('click', () => {
+    if (selectedPort) {
+        const webview = document.getElementById(`webview-${selectedPort}`);
+        if (webview && webview.canGoBack()) webview.goBack();
+    }
+});
+
+webForwardBtn.addEventListener('click', () => {
+    if (selectedPort) {
+        const webview = document.getElementById(`webview-${selectedPort}`);
+        if (webview && webview.canGoForward()) webview.goForward();
+    }
+});
+
+webRefreshBtn.addEventListener('click', () => {
+    if (selectedPort) {
+        const webview = document.getElementById(`webview-${selectedPort}`);
+        if (webview) webview.reload();
+    }
+});
+
+// Dashboard Home Tab click
+webHomeBtn.addEventListener('click', () => selectTab(null));
+
+// Address path input Enter key navigation
+addressPathInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        if (selectedPort) {
+            const webview = document.getElementById(`webview-${selectedPort}`);
+            if (webview) {
+                let path = addressPathInput.value.trim();
+                // Strip leading slash if any since prefix host has trailing slash
+                if (path.startsWith('/')) {
+                    path = path.substring(1);
+                }
+                webview.loadURL(`http://localhost:${selectedPort}/${path}`);
+                addressPathInput.blur(); // Remove focus after pressing Enter
+            }
+        }
+    }
+});
+
+// Resizer Button events
+resizerButtons.forEach(btn => {
+    btn.addEventListener('click', handleResizerClick);
+});
+
+// Orientation Toggle
+orientationBtn.addEventListener('click', toggleOrientation);
+
+// --- 7. Application Startup Bootstrapping ---
+window.addEventListener('DOMContentLoaded', () => {
+    renderConfigEditor();
+    renderPortsGrid();
+    
+    // Restore sidebar state from preferences
+    const isSidebarCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+    if (isSidebarCollapsed) {
+        controlPanel.classList.add('collapsed');
+        const collapseIcon = document.getElementById('collapse-icon');
+        collapseIcon.innerHTML = '<path fill="currentColor" d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/>';
+    }
+    
+    // Run initial active port query
+    checkActivePorts();
+    
+    // Set 15 seconds recurring timer to check active localhost ports
+    setInterval(checkActivePorts, 15000);
+    
+    // Window Resize listener to update scaling
+    window.addEventListener('resize', updateDeviceDimensions);
+    
+    // Collapsible Sidebar Toggle Click Listener
+    collapseSidebarBtn.addEventListener('click', () => {
+        controlPanel.classList.toggle('collapsed');
+        
+        // Save sidebar collapsed state to preferences
+        localStorage.setItem('sidebar-collapsed', controlPanel.classList.contains('collapsed'));
+        
+        // Change icon direction path (Arrow Right when collapsed, Arrow Left when expanded)
+        const collapseIcon = document.getElementById('collapse-icon');
+        if (controlPanel.classList.contains('collapsed')) {
+            collapseIcon.innerHTML = '<path fill="currentColor" d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/>';
+        } else {
+            collapseIcon.innerHTML = '<path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>';
+        }
+        
+        // Recalculate layout dimensions at key points during CSS transition
+        updateDeviceDimensions();
+        setTimeout(updateDeviceDimensions, 150);
+        setTimeout(updateDeviceDimensions, 300);
+    });
+});

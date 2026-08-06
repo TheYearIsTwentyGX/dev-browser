@@ -1,0 +1,32 @@
+{
+  "name": "dev-browser-desktop",
+  "version": "1.0.0",
+  "description": "Windows developer browser utility for multi-port testing",
+  "main": "main.js",
+  "author": "Dylan Hays",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^31.2.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.devbrowser.desktop",
+    "productName": "DevBrowser",
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "runAfterFinish": true
+    }
+  }
+}

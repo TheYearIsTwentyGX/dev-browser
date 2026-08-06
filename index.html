@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dev Browser - Desktop Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app-container">
+        <!-- 1. Left Panel: Controls & Ports -->
+        <aside id="control-panel">
+            <header id="app-header">
+                <div class="header-main-row">
+                    <h1 class="logo-full">DEV BROWSER</h1>
+                    <h1 class="logo-collapsed">DB</h1>
+                    <button id="collapse-sidebar-btn" class="icon-btn" title="Toggle Sidebar">
+                        <svg viewBox="0 0 24 24" width="16" height="16" id="collapse-icon"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                    </button>
+                </div>
+                <div class="subtitle">Windows Local Host Browser</div>
+            </header>
+
+            <div class="scrollable-controls">
+                <!-- Detected Active Servers Section -->
+                <section class="control-section" id="detected-ports-section">
+                    <div class="section-title-row">
+                        <h2>Detected Active Ports</h2>
+                        <span class="status-pulse active"></span>
+                    </div>
+                    <div id="detected-ports-list" class="ports-list empty">
+                        Scanning localhost...
+                    </div>
+                </section>
+
+                <!-- Quick Select Section -->
+                <section class="control-section">
+                    <div class="section-title-row">
+                        <h2>Quick Select Ports</h2>
+                        <button id="toggle-config-btn" class="icon-btn" title="Configure ranges">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Config Editor Panel (Hidden by default) -->
+                    <div id="config-editor" class="hidden">
+                        <p class="help-text">Configure port ranges (e.g. 5000-5060, 3000):</p>
+                        <div class="input-row">
+                            <input type="text" id="new-range-input" placeholder="e.g. 8000-8080">
+                            <button id="add-range-btn" class="btn btn-primary">+</button>
+                        </div>
+                        <ul id="ranges-list">
+                            <!-- Populated dynamically -->
+                        </ul>
+                        <hr class="section-divider">
+                    </div>
+
+                    <div id="quick-ports-grid" class="ports-grid">
+                        <!-- Populated dynamically -->
+                    </div>
+                </section>
+
+                <!-- Custom Connection Section -->
+                <section class="control-section">
+                    <h2>Connect to Custom Port</h2>
+                    <div class="input-row">
+                        <input type="number" id="custom-port-input" placeholder="e.g. 8080" min="1" max="65535">
+                        <button id="open-custom-port-btn" class="btn btn-cyan">Open</button>
+                    </div>
+                </section>
+            </div>
+        </aside>
+
+        <!-- 2. Right Workspace: Tab switching, Browser and resizable viewport -->
+        <main id="workspace">
+
+
+            <!-- Dashboard Landing (Shown when no port is active) -->
+            <div id="dashboard-landing" class="canvas-view">
+                <div class="welcome-box">
+                    <div class="logo-animation">
+                        <span class="logo-box">DB</span>
+                    </div>
+                    <h2>Welcome to Dev Browser</h2>
+                    <p>Select an active port from the left panel or configure your port ranges to start responsive local testing.</p>
+                    <div class="features-guide">
+                        <div class="guide-item">
+                            <h3>⚡ Multi-Tab Persistence</h3>
+                            <p>Every port you open runs in its own background WebView. Switch back and forth instantly without page reloads.</p>
+                        </div>
+                        <div class="guide-item">
+                            <h3>📱 Aspect Ratio Testing</h3>
+                            <p>Test web layouts at common aspect ratios for mobile, tablet, and desktop using built-in window and viewport resizers.</p>
+                        </div>
+                        <div class="guide-item">
+                            <h3>🔍 Auto Port Discovery</h3>
+                            <p>The app automatically scans for active localhost listening ports in the background and highlights them for quick access.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Browser View container (Hidden initially) -->
+            <div id="browser-view" class="canvas-view hidden">
+                <!-- Browser Toolbar -->
+                <div id="browser-toolbar">
+                    <div class="toolbar-nav">
+                        <button id="web-home-btn" class="toolbar-btn" title="Go to Dashboard">
+                            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                        </button>
+                        <button id="web-back-btn" class="toolbar-btn" disabled title="Go back">
+                            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                        </button>
+                        <button id="web-forward-btn" class="toolbar-btn" disabled title="Go forward">
+                            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
+                        </button>
+                        <button id="web-refresh-btn" class="toolbar-btn" title="Reload page">
+                            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Address / Location bar -->
+                    <div id="address-bar">
+                        <span class="protocol">http://</span>
+                        <span id="address-host">localhost:5000/</span>
+                        <input type="text" id="address-path-input" placeholder="path/to/page" autocomplete="off" spellcheck="false" />
+                    </div>
+
+                    <!-- Aspect Ratio & Resizing Controls -->
+                    <div class="resizer-controls">
+                        <!-- Internal Viewport Resizer -->
+                        <div class="control-group">
+                            <label>Internal Viewport</label>
+                            <div class="btn-group">
+                                <button class="resizer-btn active" data-type="viewport" data-device="fit">Fit</button>
+                                <button class="resizer-btn" data-type="viewport" data-device="phone" data-width="375" data-height="812" title="Simulate iPhone X/11">Phone</button>
+                                <button class="resizer-btn" data-type="viewport" data-device="tablet" data-width="768" data-height="1024" title="Simulate iPad">Tablet</button>
+                                <button class="resizer-btn" data-type="viewport" data-device="desktop" data-width="1440" data-height="900" title="Simulate Macbook">Desktop</button>
+                            </div>
+                        </div>
+
+                        <!-- Orientation Toggle (Only enabled when viewport simulated) -->
+                        <button id="orientation-btn" class="toolbar-btn" disabled title="Toggle Portrait/Landscape">
+                            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+                        </button>
+
+                        <div class="vertical-divider"></div>
+
+                        <!-- OS Window Resizer -->
+                        <div class="control-group">
+                            <label>OS Window</label>
+                            <div class="btn-group">
+                                <button class="resizer-btn" data-type="window" data-width="390" data-height="820" title="Resize system window to phone size">Phone</button>
+                                <button class="resizer-btn" data-type="window" data-width="820" data-height="1080" title="Resize system window to tablet size">Tablet</button>
+                                <button class="resizer-btn" data-type="window" data-width="1400" data-height="900" title="Resize system window to desktop size">Desktop</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resizable Viewport Area -->
+                <div id="viewport-canvas">
+                    <div id="device-wrapper" class="fit">
+                        <!-- Frame decorations (Only shown for phone/tablet) -->
+                        <div class="device-frame-decorations">
+                            <div class="camera-notch"></div>
+                            <div class="home-indicator"></div>
+                        </div>
+                        
+                        <!-- Webview Host container where webviews are embedded -->
+                        <div id="webview-container">
+                            <!-- All webviews will be instantiated here dynamically -->
+                        </div>
+
+                        <div id="dimensions-badge" class="hidden">375 x 812 (100%)</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="renderer.js" defer></script>
+</body>
+</html>

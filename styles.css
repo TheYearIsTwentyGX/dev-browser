@@ -1,0 +1,877 @@
+/* Root variables for sleek dark theme styling */
+:root {
+    --bg-dark: #0A0A0C;
+    --bg-panel: #121217;
+    --bg-card: #1C1C24;
+    --bg-input: #0D0D11;
+    --border-color: #2D2D3B;
+    --border-color-hover: #3E3E52;
+    --primary-blue: #3B82F6;
+    --accent-cyan: #06B6D4;
+    --status-green: #10B981;
+    --status-red: #EF4444;
+    --text-primary: #F3F4F6;
+    --text-secondary: #9CA3AF;
+    --text-muted: #6B7280;
+    --font-sans: 'Outfit', sans-serif;
+    --font-mono: 'Fira Code', monospace;
+    --transition-speed: 0.25s;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--border-color-hover);
+}
+
+#app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+/* 1. Left Control Panel */
+#control-panel {
+    width: 320px;
+    min-width: 320px;
+    background-color: var(--bg-panel);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#control-panel.collapsed {
+    width: 80px;
+    min-width: 80px;
+}
+
+#app-header {
+    padding: 24px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background: linear-gradient(180deg, rgba(28,28,36,0.4) 0%, rgba(18,18,23,0) 100%);
+}
+
+#control-panel.collapsed #app-header {
+    padding: 20px 8px;
+    text-align: center;
+}
+
+.header-main-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+#control-panel.collapsed .header-main-row {
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+}
+
+.logo-full {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    background: linear-gradient(90deg, var(--text-primary) 0%, var(--accent-cyan) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.logo-collapsed {
+    display: none;
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--primary-blue) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+#control-panel.collapsed .logo-full {
+    display: none;
+}
+
+#control-panel.collapsed .logo-collapsed {
+    display: block;
+}
+
+#app-header .subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+#control-panel.collapsed .subtitle {
+    display: none;
+}
+
+/* When collapsed, hide headers, sections, settings, custom inputs, etc. */
+#control-panel.collapsed .control-section h2,
+#control-panel.collapsed .control-section p,
+#control-panel.collapsed .section-title-row,
+#control-panel.collapsed #config-editor,
+#control-panel.collapsed .control-section:nth-of-type(3) { /* Hide custom port section */
+    display: none !important;
+}
+
+#control-panel.collapsed .scrollable-controls {
+    padding: 16px 10px;
+    gap: 16px;
+    overflow-x: hidden;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+}
+
+#control-panel.collapsed .scrollable-controls::-webkit-scrollbar {
+    display: none; /* Chrome/Electron webkit */
+}
+
+#control-panel.collapsed .ports-grid {
+    grid-template-columns: 1fr;
+    max-height: none;
+}
+
+#control-panel.collapsed .port-card {
+    font-size: 11px;
+    padding: 8px 0;
+}
+
+#control-panel.collapsed .port-strip {
+    padding: 6px;
+    justify-content: center;
+}
+
+#control-panel.collapsed .port-strip span:first-child {
+    font-size: 11px;
+}
+
+#control-panel.collapsed .port-strip .badge {
+    display: none;
+}
+
+.scrollable-controls {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.control-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.section-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.control-section h2 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+}
+
+.status-pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--text-muted);
+    display: inline-block;
+}
+
+.status-pulse.active {
+    background-color: var(--status-green);
+    box-shadow: 0 0 8px var(--status-green);
+    animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+    0% { transform: scale(0.95); opacity: 0.5; }
+    50% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 10px var(--status-green); }
+    100% { transform: scale(0.95); opacity: 0.5; }
+}
+
+/* Ports buttons list style */
+.ports-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ports-list.empty {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 16px;
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+    text-align: center;
+    background-color: rgba(28,28,36,0.15);
+}
+
+.port-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background-color: rgba(16,185,129,0.06);
+    border: 1px solid rgba(16,185,129,0.35);
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--status-green);
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.05);
+    transition: all var(--transition-speed) ease;
+}
+
+.port-strip:hover {
+    background-color: rgba(16,185,129,0.12);
+    border-color: var(--status-green);
+    box-shadow: 0 0 10px rgba(16,185,129,0.4);
+    transform: translateY(-1px);
+}
+
+.port-strip .badge {
+    font-size: 9px;
+    background-color: var(--status-green);
+    color: black;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.ports-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+/* Port Button Card */
+.port-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 0;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: all var(--transition-speed) ease;
+}
+
+.port-card:hover {
+    background-color: var(--bg-panel);
+    border-color: var(--border-color-hover);
+    transform: translateY(-1px);
+}
+
+/* If port active tab open in background */
+.port-card.active-tab {
+    border-color: var(--primary-blue);
+    background-color: rgba(59,130,246,0.1);
+    color: var(--primary-blue);
+    font-weight: 700;
+}
+
+.port-card.active-tab::after {
+    content: '';
+    position: absolute;
+    bottom: 3px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background-color: var(--primary-blue);
+}
+
+/* If port is detected active on localhost */
+.port-card.detected-active {
+    border-color: var(--status-green);
+    color: var(--status-green);
+    background-color: rgba(16,185,129,0.06);
+    box-shadow: 0 0 6px rgba(16,185,129,0.25);
+    font-weight: 700;
+}
+
+.port-card.detected-active.active-tab {
+    background: radial-gradient(circle at center, rgba(59,130,246,0.15) 0%, rgba(16,185,129,0.08) 100%);
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+}
+
+/* Button & input elements style */
+.input-row {
+    display: flex;
+    gap: 8px;
+}
+
+input[type="text"], input[type="number"] {
+    flex: 1;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    transition: all var(--transition-speed);
+}
+
+input[type="text"]:focus, input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 6px rgba(59,130,246,0.2);
+}
+
+.btn {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    transition: all var(--transition-speed);
+}
+
+.btn-primary {
+    background-color: var(--primary-blue);
+    color: white;
+}
+.btn-primary:hover {
+    background-color: #2563EB;
+}
+
+.btn-cyan {
+    background-color: var(--accent-cyan);
+    color: black;
+}
+.btn-cyan:hover {
+    background-color: #0891B2;
+    box-shadow: 0 0 8px rgba(6,182,212,0.3);
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    padding: 4px;
+    transition: all var(--transition-speed);
+}
+
+.icon-btn:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-card);
+}
+
+/* Range Editor Styling */
+#config-editor {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.help-text {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+#ranges-list {
+    list-style: none;
+    max-height: 120px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+#ranges-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--bg-panel);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border: 1px solid var(--border-color);
+}
+
+#ranges-list li .delete-range-btn {
+    background: none;
+    border: none;
+    color: var(--status-red);
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.section-divider {
+    border: 0;
+    border-top: 1px solid var(--border-color);
+    margin: 8px 0;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* 2. Workspace container styling */
+#workspace {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-dark);
+    height: 100%;
+    overflow: hidden;
+}
+
+
+
+/* Canvas view setup */
+.canvas-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Welcome Box styling */
+#dashboard-landing {
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    background: radial-gradient(circle at center, rgba(28,28,36,0.3) 0%, rgba(10,10,12,0) 80%);
+}
+
+.welcome-box {
+    max-width: 620px;
+    text-align: center;
+}
+
+.logo-animation {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+
+.logo-box {
+    font-family: var(--font-mono);
+    font-size: 32px;
+    font-weight: 800;
+    color: black;
+    background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--primary-blue) 100%);
+    padding: 12px 20px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(6,182,212,0.25);
+    display: inline-block;
+}
+
+.welcome-box h2 {
+    font-size: 26px;
+    font-weight: 800;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+}
+
+.welcome-box p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 32px;
+}
+
+.features-guide {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    text-align: left;
+}
+
+.guide-item {
+    background-color: rgba(28,28,36,0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.guide-item h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.guide-item p {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 0;
+}
+
+/* Browser Header Toolbar */
+#browser-toolbar {
+    background-color: var(--bg-panel);
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 52px;
+}
+
+.toolbar-nav {
+    display: flex;
+    gap: 4px;
+}
+
+.toolbar-btn {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-speed);
+}
+
+.toolbar-btn:hover:not(:disabled) {
+    background-color: var(--bg-card);
+}
+
+.toolbar-btn:disabled {
+    color: var(--text-muted);
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+#address-bar-container {
+    flex: 1;
+}
+
+/* Address / Location bar */
+#address-bar {
+    flex: 1;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+}
+
+#address-bar .protocol {
+    color: var(--text-muted);
+    user-select: none;
+}
+
+#address-bar #address-host {
+    color: var(--text-secondary);
+    font-weight: 500;
+    user-select: none;
+}
+
+#address-bar #address-path-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--accent-cyan);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 0;
+    margin: 0;
+    margin-left: 2px;
+}
+
+#address-bar #address-path-input::placeholder {
+    color: var(--text-muted);
+}
+
+.resizer-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.control-group label {
+    font-size: 9px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}
+
+.btn-group {
+    display: flex;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.resizer-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    transition: all var(--transition-speed);
+}
+
+.resizer-btn:hover {
+    color: var(--text-primary);
+    background-color: rgba(255,255,255,0.03);
+}
+
+.resizer-btn.active {
+    background-color: var(--primary-blue);
+    color: white;
+}
+
+.vertical-divider {
+    width: 1px;
+    height: 24px;
+    background-color: var(--border-color);
+}
+
+/* Resizable Viewport Canvas area */
+#viewport-canvas {
+    flex: 1;
+    background-color: #070709;
+    overflow: auto;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0; /* Default to edge-to-edge for Fit mode */
+    transition: padding 0.35s ease;
+}
+
+#viewport-canvas.device-mode {
+    padding: 40px; /* Add margin when simulating a device to leave room for mockup frames and shadow */
+}
+
+/* Device Wrapper simulation mockup */
+#device-wrapper {
+    position: relative;
+    background-color: var(--bg-panel);
+    box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+    max-height: 100%;
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+                height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                border-radius 0.35s, border-width 0.35s, border-color 0.35s;
+}
+
+/* Class presets for devices */
+#device-wrapper.fit {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+}
+
+#device-wrapper.phone {
+    border-radius: 36px;
+    border: 12px solid #23232C;
+    border-top-width: 14px;
+    border-bottom-width: 14px;
+    box-sizing: content-box; /* Crucial to keep dimensions exact inside */
+}
+
+#device-wrapper.tablet {
+    border-radius: 20px;
+    border: 16px solid #23232C;
+    box-sizing: content-box;
+}
+
+#device-wrapper.desktop {
+    border-radius: 8px;
+    border: 8px solid #23232C;
+    border-bottom-width: 24px;
+    box-sizing: content-box;
+}
+
+/* Simulated screen decorations */
+.device-frame-decorations {
+    display: none;
+}
+
+#device-wrapper.phone .device-frame-decorations {
+    display: block;
+}
+
+/* Notch display */
+#device-wrapper.phone .camera-notch {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 18px;
+    background-color: #23232C;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+    z-index: 100;
+    pointer-events: none;
+    transition: all 0.35s;
+}
+
+/* Notch placement when rotated */
+#device-wrapper.phone.landscape .camera-notch {
+    top: 50%;
+    left: -12px;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 110px;
+    border-top-right-radius: 12px;
+    border-bottom-right-radius: 12px;
+    border-bottom-left-radius: 0;
+}
+
+#device-wrapper.phone .home-indicator {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 4px;
+    background-color: rgba(255,255,255,0.3);
+    border-radius: 2px;
+    z-index: 100;
+    pointer-events: none;
+}
+
+#device-wrapper.phone.landscape .home-indicator {
+    bottom: 50%;
+    left: auto;
+    right: 6px;
+    transform: translateY(50%);
+    width: 4px;
+    height: 100px;
+}
+
+/* Webview wrapper inside device frame */
+#webview-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    background-color: var(--bg-panel);
+}
+
+/* Webview items (Electron webview tags) */
+webview {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    border: none;
+    background-color: var(--bg-panel);
+    
+    /* Move offscreen instead of using display: none to prevent Chromium layout collapse bug */
+    transform: translateY(-99999px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+webview.active {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Dimensions Overlay Badge */
+#dimensions-badge {
+    position: absolute;
+    bottom: -32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    z-index: 100;
+}
