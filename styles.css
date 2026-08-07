@@ -412,6 +412,12 @@ body {
     visibility: visible;
 }
 
+/* Applied while moving straight from one port to another, so the popover simply
+   jumps to the new one instead of fading out and back in */
+.port-popover.instant {
+    transition: none;
+}
+
 .port-popover .popover-title {
     display: block;
     font-family: var(--font-sans);

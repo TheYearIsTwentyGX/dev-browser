@@ -108,12 +108,27 @@ if (portPopover) {
     portPopover.appendChild(popoverPortEl);
 }
 
+// Leaving a port button does not hide the popover straight away. Sliding from one
+// port to the next crosses the gap between them, and hiding on that gap would
+// start a fade-out the next hover has to undo — which is what made moving down
+// the rail feel sluggish. A short grace period lets the next hover cancel it.
+const POPOVER_HIDE_GRACE_MS = 120;
+let popoverHideTimer = null;
+
 function isSidebarCollapsed() {
     return controlPanel.classList.contains('collapsed');
 }
 
 function showPortPopover(anchor, port, title) {
     if (!portPopover || !title || !isSidebarCollapsed()) return;
+
+    // Cancel a hide left pending from the port we just came off
+    clearTimeout(popoverHideTimer);
+    popoverHideTimer = null;
+
+    // Already up? Then this is a move between ports: swap contents and position
+    // with the fade switched off so the new title appears with no animation.
+    portPopover.classList.toggle('instant', portPopover.classList.contains('visible'));
 
     // Titles come from agents, so assign as text and never as markup
     popoverTitleEl.textContent = title;
@@ -144,10 +159,20 @@ function showPortPopover(anchor, port, title) {
     portPopover.setAttribute('aria-hidden', 'false');
 }
 
+// Drop it now, with no grace period — for when the anchor itself is going away
+function hidePortPopoverNow() {
+    if (!portPopover) return;
+    clearTimeout(popoverHideTimer);
+    popoverHideTimer = null;
+    portPopover.classList.remove('visible', 'instant');
+    portPopover.setAttribute('aria-hidden', 'true');
+}
+
+// Leaving a port button: hold briefly so a hover on the next port can cancel it
 function hidePortPopover() {
     if (!portPopover) return;
-    portPopover.classList.remove('visible');
-    portPopover.setAttribute('aria-hidden', 'true');
+    clearTimeout(popoverHideTimer);
+    popoverHideTimer = setTimeout(hidePortPopoverNow, POPOVER_HIDE_GRACE_MS);
 }
 
 function attachPortHover(el, port) {
@@ -732,10 +757,11 @@ window.addEventListener('DOMContentLoaded', () => {
     // Window Resize listener to update scaling
     window.addEventListener('resize', updateDeviceDimensions);
 
-    // The popover is fixed-position, so dismiss it whenever its anchor can move
+    // The popover is fixed-position, so dismiss it outright whenever its anchor
+    // can move out from under it — no grace period in those cases
     const scrollableControls = document.querySelector('.scrollable-controls');
-    if (scrollableControls) scrollableControls.addEventListener('scroll', hidePortPopover);
-    window.addEventListener('resize', hidePortPopover);
+    if (scrollableControls) scrollableControls.addEventListener('scroll', hidePortPopoverNow);
+    window.addEventListener('resize', hidePortPopoverNow);
     
     // Collapsible Sidebar Toggle Click Listener
     collapseSidebarBtn.addEventListener('click', () => {
@@ -754,7 +780,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
         // Whether a native title= is used depends on the collapsed state, so
         // re-render to refresh it, and drop any popover left showing
-        hidePortPopover();
+        hidePortPopoverNow();
         renderPortsGrid();
         renderDetectedPortsList();
 
