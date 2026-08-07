@@ -94,6 +94,75 @@ function escapeHtml(value) {
     })[char]);
 }
 
+// --- 1c. Collapsed-rail hover popover ---
+
+// When the sidebar is collapsed there is only ~60px of card, so titles are hidden.
+// This shows them instantly on hover instead of waiting on a native tooltip.
+const portPopover = document.getElementById('port-popover');
+const popoverTitleEl = document.createElement('span');
+const popoverPortEl = document.createElement('span');
+popoverTitleEl.className = 'popover-title';
+popoverPortEl.className = 'popover-port';
+if (portPopover) {
+    portPopover.appendChild(popoverTitleEl);
+    portPopover.appendChild(popoverPortEl);
+}
+
+function isSidebarCollapsed() {
+    return controlPanel.classList.contains('collapsed');
+}
+
+function showPortPopover(anchor, port, title) {
+    if (!portPopover || !title || !isSidebarCollapsed()) return;
+
+    // Titles come from agents, so assign as text and never as markup
+    popoverTitleEl.textContent = title;
+    popoverPortEl.textContent = `localhost:${port}`;
+
+    // Measured before it is shown; visibility:hidden still reports layout
+    const rect = anchor.getBoundingClientRect();
+    const height = portPopover.offsetHeight;
+    const margin = 8;
+
+    let top = rect.top + (rect.height - height) / 2;
+    top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
+
+    // Hang off the rail's edge, not the card's: cards are inset by the rail
+    // padding, so anchoring to the card would overlap the sidebar border
+    const railRight = controlPanel.getBoundingClientRect().right;
+    portPopover.style.left = `${railRight + 10}px`;
+    portPopover.style.top = `${top}px`;
+    // Keep the caret aimed at the card even when the popover is clamped to the viewport
+    portPopover.style.setProperty('--caret-top', `${rect.top + rect.height / 2 - top}px`);
+
+    portPopover.classList.add('visible');
+    portPopover.setAttribute('aria-hidden', 'false');
+}
+
+function hidePortPopover() {
+    if (!portPopover) return;
+    portPopover.classList.remove('visible');
+    portPopover.setAttribute('aria-hidden', 'true');
+}
+
+function attachPortHover(el, port) {
+    el.addEventListener('mouseenter', () => showPortPopover(el, port, titleFor(port)));
+    el.addEventListener('mouseleave', hidePortPopover);
+}
+
+// A native title= tooltip would show up a second later and duplicate the popover,
+// so it is only used while expanded — where it reveals an ellipsised title.
+function applyNativeTooltip(el, port) {
+    const title = titleFor(port);
+    if (title && isSidebarCollapsed()) {
+        el.removeAttribute('title');
+    } else if (title) {
+        el.title = `${title} — localhost:${port}`;
+    } else {
+        el.title = `localhost:${port}`;
+    }
+}
+
 // Push tab state up to main so the control server can answer GET /ports
 function syncStateToMain() {
     if (!window.devBrowser) return;
@@ -158,16 +227,15 @@ function renderPortsGrid() {
             titleLabel.className = 'port-title';
             titleLabel.innerText = title;
             card.appendChild(titleLabel);
-            card.title = `${title} — localhost:${port}`;
-        } else {
-            card.title = `localhost:${port}`;
         }
+        applyNativeTooltip(card, port);
 
         // Apply state classes
         if (openTabs.includes(port)) card.classList.add('active-tab');
         if (activeDetectedPorts.includes(port)) card.classList.add('detected-active');
 
         card.addEventListener('click', () => openPort(port));
+        attachPortHover(card, port);
         quickPortsGrid.appendChild(card);
     });
 }
@@ -197,7 +265,9 @@ function renderDetectedPortsList() {
             ${label}
             <span class="badge">Active</span>
         `;
+        applyNativeTooltip(strip, port);
         strip.addEventListener('click', () => openPort(port));
+        attachPortHover(strip, port);
         detectedPortsList.appendChild(strip);
     });
 }
@@ -656,6 +726,11 @@ window.addEventListener('DOMContentLoaded', () => {
     
     // Window Resize listener to update scaling
     window.addEventListener('resize', updateDeviceDimensions);
+
+    // The popover is fixed-position, so dismiss it whenever its anchor can move
+    const scrollableControls = document.querySelector('.scrollable-controls');
+    if (scrollableControls) scrollableControls.addEventListener('scroll', hidePortPopover);
+    window.addEventListener('resize', hidePortPopover);
     
     // Collapsible Sidebar Toggle Click Listener
     collapseSidebarBtn.addEventListener('click', () => {
@@ -671,7 +746,14 @@ window.addEventListener('DOMContentLoaded', () => {
         } else {
             collapseIcon.innerHTML = '<path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>';
         }
-        
+
+        // Whether a native title= is used depends on the collapsed state, so
+        // re-render to refresh it, and drop any popover left showing
+        hidePortPopover();
+        renderPortsGrid();
+        renderDetectedPortsList();
+
+
         // Recalculate layout dimensions at key points during CSS transition
         updateDeviceDimensions();
         setTimeout(updateDeviceDimensions, 150);

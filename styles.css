@@ -383,6 +383,70 @@ body {
     padding: 8px 0;
 }
 
+/* Instant hover label for the collapsed rail, where there is no room to show a
+   title inline. Fixed-position and body-level so #app-container's overflow:hidden
+   and the rail's overflow-x:hidden cannot clip it. */
+.port-popover {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    max-width: 260px;
+    padding: 7px 11px;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color-hover);
+    border-radius: 7px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    /* Short fade, no delay — the point is that it beats the ~1s native tooltip */
+    transition: opacity 90ms ease-out;
+}
+
+.port-popover.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.port-popover .popover-title {
+    display: block;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.port-popover .popover-port {
+    display: block;
+    margin-top: 2px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* Caret pointing back at the rail */
+.port-popover::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    /* Set from JS so the caret still points at the card when the popover is
+       clamped against the top or bottom of the viewport */
+    top: var(--caret-top, 50%);
+    width: 8px;
+    height: 8px;
+    margin-top: -4px;
+    background-color: var(--bg-card);
+    border-left: 1px solid var(--border-color-hover);
+    border-bottom: 1px solid var(--border-color-hover);
+    transform: rotate(45deg);
+}
+
 /* Detected-port strips lead with the title when one is set */
 .port-strip .strip-label {
     display: flex;
@@ -414,8 +478,20 @@ body {
     opacity: 0.7;
 }
 
-#control-panel.collapsed .port-strip .strip-port {
+/* In the 80px rail a title only survives as "LTCD…", which identifies nothing.
+   Show the port number instead and let the hover popover carry the title. */
+#control-panel.collapsed .port-strip .strip-title:not(.untitled) {
     display: none;
+}
+
+#control-panel.collapsed .port-strip .strip-port,
+#control-panel.collapsed .port-strip .strip-title.untitled {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    opacity: 1;
+    /* Let "Port 5001" wrap rather than clip to "Port …" in the narrow rail */
+    white-space: normal;
+    overflow: visible;
 }
 
 /* Button & input elements style */
