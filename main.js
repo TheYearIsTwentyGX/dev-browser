@@ -13,6 +13,39 @@ let controlServer;
 // instead of round-tripping into the renderer inside an HTTP handler.
 let rendererState = { openTabs: [], selectedPort: null, detectedPorts: [] };
 
+// DevTools shortcuts.
+//
+// before-input-event only fires on the webContents that currently has focus, and a
+// <webview> is a separate webContents from the window that hosts it. Listening on
+// the window alone therefore missed every keypress the moment a tab was focused,
+// which is most of the time. Registering through web-contents-created instead
+// covers the shell and every guest page. This runs at module load, before any
+// webContents exists, so nothing is missed.
+app.on('web-contents-created', (_event, contents) => {
+    contents.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown') return;
+
+        // This runs for every keystroke in every page, so it must never throw
+        const key = typeof input.key === 'string' ? input.key : '';
+        const isF12 = key === 'F12';
+        const isInspect = input.control && input.shift && key.toLowerCase() === 'i';
+        if (!isF12 && !isInspect) return;
+
+        // Inspect the page actually being looked at, the way a browser would.
+        // Keypresses on the dashboard or sidebar fall through to the shell.
+        const target = contents.getType() === 'webview'
+            ? contents
+            : (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : contents);
+
+        if (target.isDevToolsOpened()) {
+            target.closeDevTools();
+        } else {
+            target.openDevTools();
+        }
+        event.preventDefault();
+    });
+});
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
@@ -30,14 +63,6 @@ function createWindow() {
     });
 
     mainWindow.loadFile('index.html');
-
-    // Toggle DevTools when F12 is pressed (handles focus inside webviews)
-    mainWindow.webContents.on('before-input-event', (event, input) => {
-        if (input.key === 'F12' && input.type === 'keyDown') {
-            mainWindow.webContents.toggleDevTools();
-            event.preventDefault();
-        }
-    });
 
     // Handle window closure cleanup
     mainWindow.on('closed', () => {
