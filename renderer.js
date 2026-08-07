@@ -119,18 +119,23 @@ function showPortPopover(anchor, port, title) {
     popoverTitleEl.textContent = title;
     popoverPortEl.textContent = `localhost:${port}`;
 
-    // Measured before it is shown; visibility:hidden still reports layout
     const rect = anchor.getBoundingClientRect();
-    const height = portPopover.offsetHeight;
     const margin = 8;
-
-    let top = rect.top + (rect.height - height) / 2;
-    top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
 
     // Hang off the rail's edge, not the card's: cards are inset by the rail
     // padding, so anchoring to the card would overlap the sidebar border
-    const railRight = controlPanel.getBoundingClientRect().right;
-    portPopover.style.left = `${railRight + 10}px`;
+    const left = controlPanel.getBoundingClientRect().right + 10;
+    portPopover.style.left = `${left}px`;
+
+    // Widen to fit the title, capped only by the room left in the window. Long
+    // names wrap instead of truncating, so this must be applied before the
+    // height is measured.
+    portPopover.style.maxWidth = `${Math.max(120, window.innerWidth - left - margin)}px`;
+
+    // visibility:hidden still reports layout, so this measures the final size
+    const height = portPopover.offsetHeight;
+    let top = rect.top + (rect.height - height) / 2;
+    top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
     portPopover.style.top = `${top}px`;
     // Keep the caret aimed at the card even when the popover is clamped to the viewport
     portPopover.style.setProperty('--caret-top', `${rect.top + rect.height / 2 - top}px`);

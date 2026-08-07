@@ -38,6 +38,21 @@ devbrowser status                   is the app reachable, and on which port
 
 Exit codes: `0` success, `1` usage or validation error, `2` DevBrowser not running.
 
+### Choosing a name
+
+Name what distinguishes the server, not the project. When every server on the machine
+belongs to one project, a `MyProject …` prefix repeats on every tab and pushes the
+identifying part out of view in the sidebar. Lead with the worktree, branch or purpose:
+
+```bash
+devbrowser title 5000 "main"
+devbrowser title 5003 "sitevisits-rdo-rvp"
+devbrowser title 5005 "dedupe (PROD DB)"
+```
+
+Include a project name only when servers from more than one project really are running
+at once. Titles are capped at 64 characters, and shorter reads better in the narrow rail.
+
 ### Titles work even when DevBrowser is closed
 
 `devbrowser title` falls back to writing `titles.json` directly under `%APPDATA%`, which
@@ -53,7 +68,7 @@ Both live in the Electron `userData` directory — on Windows
 
 | File | Purpose |
 |---|---|
-| `titles.json` | `{"version":1,"titles":{"5001":"LTCDataPlus web"}}` — the source of truth |
+| `titles.json` | `{"version":1,"titles":{"5001":"sitevisits-rdo-rvp"}}` — the source of truth |
 | `control-server.json` | `{port,pid,version,startedAt}` — how the CLI finds a non-default port |
 
 A stale `control-server.json` (left behind by a crash) is harmless: the CLI probes the
@@ -90,7 +105,7 @@ Calling it directly:
 curl -s -H 'X-DevBrowser-Client: 1' http://127.0.0.1:45777/titles
 
 curl -s -X PUT -H 'X-DevBrowser-Client: 1' -H 'Content-Type: application/json' \
-     -d '{"title":"LTCDataPlus web"}' http://127.0.0.1:45777/titles/5001
+     -d '{"title":"sitevisits-rdo-rvp"}' http://127.0.0.1:45777/titles/5001
 ```
 
 ## Where it lives in the code
@@ -105,3 +120,8 @@ curl -s -X PUT -H 'X-DevBrowser-Client: 1' -H 'Content-Type: application/json' \
 
 Titles are displayed in four places: the Quick Select cards, the Detected Active Ports
 strips, a chip in the address bar, and the OS window title.
+
+When the sidebar is collapsed there is no room for a title inline, so the rail shows
+port numbers and hovering any named port reveals the full title in an instant popover.
+That popover grows to fit the name and wraps rather than truncating, so a long title is
+always readable there even when the inline card ellipsises it.

@@ -391,7 +391,10 @@ body {
     left: 0;
     top: 0;
     z-index: 1000;
-    max-width: 260px;
+    /* Grow to fit the title rather than truncating it. max-width is set from JS
+       to whatever room is left before the window edge, so a very long name wraps
+       instead of being cut or running off-screen. */
+    width: max-content;
     padding: 7px 11px;
     background-color: var(--bg-card);
     border: 1px solid var(--border-color-hover);
@@ -416,9 +419,8 @@ body {
     font-weight: 600;
     line-height: 1.3;
     color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /* Never ellipsised — the popover exists to show the title in full */
+    overflow-wrap: anywhere;
 }
 
 .port-popover .popover-port {
